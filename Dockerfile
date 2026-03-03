@@ -9,4 +9,4 @@ COPY . .
 
 ENV PORT=8080
 
-CMD ["gunicorn", "-b", ":8080", "app:flask_app"]
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 app:flask_app
