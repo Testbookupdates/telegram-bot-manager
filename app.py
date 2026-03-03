@@ -15,6 +15,9 @@ PORT = int(os.environ.get("PORT", 8080))
 if not TOKEN:
     raise ValueError("TOKEN not found")
 
+if not WEBHOOK_URL:
+    raise ValueError("WEBHOOK_URL not set")
+
 messages = """<b>🚀 Welcome, {first}! 🚀</b>
 
 You’ve just entered the <b>Testbook Referrer's League</b>
@@ -36,16 +39,40 @@ async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if old in ["left", "kicked"] and new in ["member", "restricted"]:
             user = update.chat_member.new_chat_member.user
-            text = messages.format(first=user.first_name)
+
+            # ✅ Proper username detection
+            if user.username:
+                display_name = f"@{user.username}"
+            else:
+                display_name = user.mention_html()
+
+            text = messages.format(first=display_name)
 
             try:
+                # Try sending private message
                 await context.bot.send_message(
                     chat_id=user.id,
                     text=text,
                     parse_mode="HTML",
                 )
-            except:
-                pass
+                print(f"DM sent to {display_name}")
+
+            except Exception as e:
+                print(f"DM failed: {e}")
+
+                # Fallback message in group
+                fallback_text = (
+                    f"Welcome {user.mention_html()}! 🚀\n"
+                    f"Click here 👉 https://t.me/{context.bot.username} "
+                    f"and press Start to receive your welcome kit!"
+                )
+
+                await context.bot.send_message(
+                    chat_id=update.chat_member.chat.id,
+                    text=fallback_text,
+                    parse_mode="HTML",
+                )
+
 
 application.add_handler(
     ChatMemberHandler(welcome, ChatMemberHandler.CHAT_MEMBER)
@@ -59,6 +86,8 @@ async def webhook():
     await application.process_update(update)
     return "OK"
 
+
+# ✅ Proper startup for Cloud Run
 async def setup():
     await application.initialize()
     await application.bot.set_webhook(
@@ -67,4 +96,6 @@ async def setup():
     )
     await application.start()
 
-asyncio.get_event_loop().run_until_complete(setup())
+# Run async setup ONCE at container start
+loop = asyncio.get_event_loop()
+loop.run_until_complete(setup())
